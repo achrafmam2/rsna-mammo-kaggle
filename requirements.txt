@@ -1,0 +1,26 @@
+absl-py
+
+numpy
+scipy
+jupyter
+matplotlib
+Pillow
+scikit-learn
+opencv-python
+
+python-gdcm
+pylibjpeg
+pylibjpeg-libjpeg
+pydicom
+pillow
+
+tensorflow
+tensorflow-datasets
+
+clu
+flax
+-f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+-f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+jax[cuda11_cudnn805]>=0.3.16
+ml-collections
+optax
