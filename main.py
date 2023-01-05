@@ -7,7 +7,6 @@ from ml_collections import config_flags
 
 import train
 
-
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string('workdir', None, 'Directory to store model data.')
