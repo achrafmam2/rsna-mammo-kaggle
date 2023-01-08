@@ -24,3 +24,6 @@ flax
 jax[cuda11_cudnn805]>=0.3.16
 ml-collections
 optax
+
+joblib
+more_itertools
