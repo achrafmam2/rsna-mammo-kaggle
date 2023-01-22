@@ -60,3 +60,16 @@ flycheck_*.el
 .bazelversion
 # User-specific .bazelrc
 user.bazelrc
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Environments
+.env
+.venv
+env/

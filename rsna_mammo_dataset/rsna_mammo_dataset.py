@@ -1,23 +1,26 @@
-"""tfds dataset."""
-
-import tensorflow_datasets as tfds
-import rsna_mammo_pipeline as rmp
-import numpy as np
-import epath
+"""RSNA Mammo Dataset Builder."""
 
 from typing import Tuple, Iterable
 
+import tensorflow_datasets as tfds
+import numpy as np
+import epath
+
+from rsna_mammo_dataset import rsna_mammo_pipeline as rmp
+
 Example = tfds.core.split_builder.Example
-SplitGenerator = tfds.core.split_builder.SplitBuilder
 
 
-class RsnaMammoBuilder(tfds.core.GeneratorBasedBuilder):
+class RsnaMammoDataset(tfds.core.GeneratorBasedBuilder):
   """TFDS builder for the RSNA Mammo dataset."""
 
-  VERSION = tfds.core.Version('1.0.0')
+  VERSION = tfds.core.Version('0.1.1')
   RELEASE_NOTES = {
-      '1.0.0': 'Initial release.',
+      '0.1.0': 'Initial release.',
+      '0.1.1': 'Split the train patients in the original dataset into 2 splits (train + eval).'
   }
+
+  MANUAL_DOWNLOAD_INSTRUCTIONS='Download the dataset from Kaggle.'
 
   def _info(self) -> tfds.core.DatasetInfo:
     """Returns the dataset metadata."""
@@ -42,13 +45,26 @@ class RsnaMammoBuilder(tfds.core.GeneratorBasedBuilder):
     root = dl_manager.manual_dir
     return {
         'train': self._generate_examples(
-            csv_path=root / 'train.csv', images_dir=root / 'train_images'),
+            metadata_path=root / 'train.csv',
+            split_path=root / 'splits/train.csv',
+            images_dir=root / 'train_images'),
+
+        'eval': self._generate_examples(
+            metadata_path=root / 'train.csv',
+            split_path=root / 'splits/eval.csv',
+            images_dir=root / 'train_images'),
     }
 
-  def _generate_examples(self, csv_path: epath.Path, images_dir: epath.Path) -> Iterable[Tuple[str, Example]]:
+  def _generate_examples(
+      self,
+      *,
+      metadata_path,
+      split_path,
+      images_dir,
+  ) -> Iterable[Tuple[str, Example]]:
     """Yields examples."""
     
-    def to_example(s: rmp.Scan) -> Example:
+    def to_example(s: rmp.Scan):
       return s.scan_id, {
         'image': s.image[..., np.newaxis], # Channel dimension is required by tfds.
         'patient_id': s.patient_id,
@@ -58,9 +74,10 @@ class RsnaMammoBuilder(tfds.core.GeneratorBasedBuilder):
       }
 
     opts = rmp.Options(
-      csv_path=csv_path,
+      metadata_path=metadata_path,
+      split_path=split_path,
       images_dir=images_dir,
       shape=(768, 384),
       allowed_views=('CC', 'MLO'))
-
     return map(to_example, rmp.load_scans(opts))
+

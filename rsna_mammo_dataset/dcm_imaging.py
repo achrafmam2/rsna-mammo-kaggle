@@ -62,4 +62,7 @@ def resize(img: np.ndarray, shape: Tuple[int, int]) -> np.ndarray:
   # https://stackoverflow.com/questions/23853632/which-kind-of-interpolation-best-for-resizing-image
   interpolation = cv2.INTER_CUBIC if target_res > cur_res else cv2.INTER_AREA
 
-  return cv2.resize(img, shape, interpolation=interpolation)
+  width = shape[1]
+  height = shape[0]
+
+  return cv2.resize(img, (width, height), interpolation=interpolation)

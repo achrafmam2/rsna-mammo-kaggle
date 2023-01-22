@@ -5,25 +5,27 @@ import more_itertools as mit
 import epath
 import dataclasses
 import functools
-import joblib
-import multiprocessing
+import multiprocessing as mp
 import pydicom
-import dcm_imaging
 import cv2
 
 from typing import Tuple, Iterable
+
+from rsna_mammo_dataset import dcm_imaging
 
 
 @dataclasses.dataclass(frozen=True)
 class Options:
   """
   Attributes:
-    - csv_path: path to the csv file that contains metadata about the patients.
+    - metadata_path: path to the csv file that contains metadata about the patients.
+    - split_path: path to the csv file that contains the patient in the split.
     - images_dir: path to the root directory that contains the patient images.
     - output_shape: the shape to resize the images to.
     - allowed_views: a sequence of views to generate examples for (e.g., 'CC', 'MLO').
   """
-  csv_path: epath.Path
+  metadata_path: epath.Path
+  split_path: epath.Path
   images_dir: epath.Path
   shape: Tuple[int, int]
   allowed_views: Tuple[str, ...]
@@ -41,27 +43,23 @@ class Scan:
 
 def load_scans(opts: Options) -> Iterable[Scan]:
   """Load scans."""
-  df = pd.read_csv(opts.csv_path)
-  df = df[df.view.isin(opts.allowed_views)]
+  metadata_df = pd.read_csv(opts.metadata_path)
+  metadata_df = metadata_df[metadata_df.view.isin(opts.allowed_views)]
+
+  split_df = pd.read_csv(opts.split_path)
+  df = metadata_df.join(split_df.set_index('patient_id'), on='patient_id', how='inner')
   
   inputs = df.to_dict(orient='records')
-  for chunk in mit.chunked(inputs, 50):
-    # We chunk to make use parrallel processing.
-    fn = functools.partial(
+  with mp.Pool() as p:
+    load_fn = functools.partial(
         _load_scan,
         images_dir=opts.images_dir,
         shape=opts.shape,
     )
-    
-    jobs = [joblib.delayed(fn)(inpt) for inpt in chunk]
-    yield from joblib.Parallel(
-      n_jobs=multiprocessing.cpu_count(),
-      verbose=0,
-      backend='multiprocessing',
-      prefer='threads',
-    )(jobs)
-        
-   
+    for scan in p.imap(load_fn, inputs):
+      yield scan
+
+
 def _load_scan(inpt, images_dir: epath.Path, shape: Tuple[int, int]) -> Scan:
   scan_id = f'{inpt["patient_id"]}/{inpt["image_id"]}'
   relpath = images_dir / f'{scan_id}.dcm'
