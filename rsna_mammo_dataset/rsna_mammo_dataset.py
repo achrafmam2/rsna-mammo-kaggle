@@ -57,7 +57,7 @@ class RsnaMammoDataset(tfds.core.GeneratorBasedBuilder):
                                     split_path=root / 'splits/train.csv',
                                     images_dir=root / 'train_images'),
         'eval':
-            self._generate_examples(metadata_path=root / 'train.csv',
+            self._generate_examples(metadata_path=root / 'train.csv', # This correct.
                                     split_path=root / 'splits/eval.csv',
                                     images_dir=root / 'train_images'),
     }
