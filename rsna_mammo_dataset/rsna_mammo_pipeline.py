@@ -9,7 +9,7 @@ import multiprocessing as mp
 import pydicom
 import cv2
 
-from typing import Tuple, Iterable
+from typing import Any, Tuple, Iterable, Optional
 
 from rsna_mammo_dataset import dcm_imaging
 
@@ -18,17 +18,19 @@ from rsna_mammo_dataset import dcm_imaging
 class Options:
   """
   Attributes:
-    - metadata_path: path to the csv file that contains metadata about the patients.
-    - split_path: path to the csv file that contains the patient in the split.
-    - images_dir: path to the root directory that contains the patient images.
-    - output_shape: the shape to resize the images to.
-    - allowed_views: a sequence of views to generate examples for (e.g., 'CC', 'MLO').
+    - metadata_path: Path to the csv file that contains metadata about the patients.
+    - split_path: An optional path to a csv file that contains which patients should be included.
+    - images_dir: Path to the root directory that contains the patient images.
+    - output_shape: The shape to resize the images to.
+    - allowed_views: A sequence of views to generate examples for (e.g., 'CC', 'MLO').
+    - labels_exist: Indicates whether labels exist or not.
   """
   metadata_path: epath.Path
-  split_path: epath.Path
+  split_path: Optional[epath.Path]
   images_dir: epath.Path
   shape: Tuple[int, int]
   allowed_views: Tuple[str, ...]
+  labels_exist: bool
 
 
 @dataclasses.dataclass(frozen=True)
@@ -38,18 +40,17 @@ class Scan:
   image: np.ndarray
   laterality: str
   view: str
-  cancer: bool
+  cancer: Optional[bool]
 
 
 def load_scans(opts: Options) -> Iterable[Scan]:
   """Load scans."""
-  metadata_df = pd.read_csv(opts.metadata_path)
-  metadata_df = metadata_df[metadata_df.view.isin(opts.allowed_views)]
+  df = pd.read_csv(opts.metadata_path)
+  df = df[df.view.isin(opts.allowed_views)]
 
-  split_df = pd.read_csv(opts.split_path)
-  df = metadata_df.join(split_df.set_index('patient_id'),
-                        on='patient_id',
-                        how='inner')
+  if opts.split_path:
+    split_df = pd.read_csv(opts.split_path)
+    df = df.join(split_df.set_index('patient_id'), on='patient_id', how='inner')
 
   inputs = df.to_dict(orient='records')
   with mp.Pool() as p:
@@ -57,20 +58,31 @@ def load_scans(opts: Options) -> Iterable[Scan]:
         _load_scan,
         images_dir=opts.images_dir,
         shape=opts.shape,
+        labels_exist=opts.labels_exist,
     )
     for scan in p.imap(load_fn, inputs):
       yield scan
 
 
-def _load_scan(inpt, images_dir: epath.Path, shape: Tuple[int, int]) -> Scan:
+def _load_scan(
+    inpt: dict[str, Any],
+    images_dir: epath.Path,
+    shape: Tuple[int, int],
+    labels_exist: bool,
+) -> Scan:
   scan_id = f'{inpt["patient_id"]}/{inpt["image_id"]}'
   relpath = images_dir / f'{scan_id}.dcm'
+
+  cancer = None
+  if labels_exist:
+    cancer = bool(inpt['cancer'])
+
   return Scan(scan_id=scan_id,
               patient_id=inpt['patient_id'],
               image=_load_image(relpath, shape),
               laterality=inpt['laterality'],
               view=inpt['view'],
-              cancer=bool(inpt['cancer']))
+              cancer=cancer)
 
 
 def _load_image(

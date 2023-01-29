@@ -14,12 +14,11 @@ Example = tfds.core.split_builder.Example
 class RsnaMammoDataset(tfds.core.GeneratorBasedBuilder):
   """TFDS builder for the RSNA Mammo dataset."""
 
-  VERSION = tfds.core.Version('0.1.1')
+  VERSION = tfds.core.Version('0.3.0')
   RELEASE_NOTES = {
-      '0.1.0':
-          'Initial release.',
-      '0.1.1':
-          'Split the train patients in the original dataset into 2 splits (train + eval).'
+      '0.1.0': 'Initial release.',
+      '0.2.0': 'Add an eval split.',
+      '0.3.0': 'Add a test split.',
   }
 
   MANUAL_DOWNLOAD_INSTRUCTIONS = 'Download the dataset from Kaggle.'
@@ -57,33 +56,45 @@ class RsnaMammoDataset(tfds.core.GeneratorBasedBuilder):
                                     split_path=root / 'splits/train.csv',
                                     images_dir=root / 'train_images'),
         'eval':
-            self._generate_examples(metadata_path=root / 'train.csv', # This correct.
-                                    split_path=root / 'splits/eval.csv',
-                                    images_dir=root / 'train_images'),
+            self._generate_examples(
+                metadata_path=root / 'train.csv',  # This correct.
+                split_path=root / 'splits/eval.csv',
+                images_dir=root / 'train_images'),
+        'test':
+            self._generate_examples(metadata_path=root / 'test.csv',
+                                    images_dir=root / 'test_images',
+                                    labels_exist=False),
     }
 
   def _generate_examples(
       self,
       *,
       metadata_path,
-      split_path,
       images_dir,
+      labels_exist: bool = True,
+      split_path=None,
   ) -> Iterable[Tuple[str, Example]]:
     """Yields examples."""
 
     def to_example(s: rmp.Scan):
-      return s.scan_id, {
+      ex = {
           'image': s.image[
               ..., np.newaxis],  # Channel dimension is required by tfds.
           'patient_id': s.patient_id,
           'laterality': s.laterality,
           'view': s.view,
-          'cancer': int(s.cancer),
       }
+      if s.cancer:
+        ex['cancer'] = int(s.cancer)
+      else:
+        ex['cancer'] = -1  # For the test split.
+
+      return s.scan_id, ex
 
     opts = rmp.Options(metadata_path=metadata_path,
                        split_path=split_path,
                        images_dir=images_dir,
                        shape=(768, 384),
-                       allowed_views=('CC', 'MLO'))
+                       allowed_views=('CC', 'MLO'),
+                       labels_exist=labels_exist)
     return map(to_example, rmp.load_scans(opts))
