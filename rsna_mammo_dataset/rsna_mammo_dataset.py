@@ -14,11 +14,12 @@ Example = tfds.core.split_builder.Example
 class RsnaMammoDataset(tfds.core.GeneratorBasedBuilder):
   """TFDS builder for the RSNA Mammo dataset."""
 
-  VERSION = tfds.core.Version('0.3.0')
+  VERSION = tfds.core.Version('0.3.1')
   RELEASE_NOTES = {
       '0.1.0': 'Initial release.',
       '0.2.0': 'Add an eval split.',
       '0.3.0': 'Add a test split.',
+      '0.3.1': 'Fix incorrect labels.',
   }
 
   MANUAL_DOWNLOAD_INSTRUCTIONS = 'Download the dataset from Kaggle.'
@@ -84,7 +85,7 @@ class RsnaMammoDataset(tfds.core.GeneratorBasedBuilder):
           'laterality': s.laterality,
           'view': s.view,
       }
-      if s.cancer:
+      if labels_exist:
         ex['cancer'] = int(s.cancer)
       else:
         ex['cancer'] = -1  # For the test split.
