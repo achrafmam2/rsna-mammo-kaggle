@@ -14,12 +14,13 @@ Example = tfds.core.split_builder.Example
 class RsnaMammoDataset(tfds.core.GeneratorBasedBuilder):
   """TFDS builder for the RSNA Mammo dataset."""
 
-  VERSION = tfds.core.Version('0.3.1')
+  VERSION = tfds.core.Version('0.3.2')
   RELEASE_NOTES = {
       '0.1.0': 'Initial release.',
       '0.2.0': 'Add an eval split.',
       '0.3.0': 'Add a test split.',
       '0.3.1': 'Fix incorrect labels.',
+      '0.3.2': 'Rename eval split to validation.',
   }
 
   MANUAL_DOWNLOAD_INSTRUCTIONS = 'Download the dataset from Kaggle.'
@@ -56,10 +57,10 @@ class RsnaMammoDataset(tfds.core.GeneratorBasedBuilder):
             self._generate_examples(metadata_path=root / 'train.csv',
                                     split_path=root / 'splits/train.csv',
                                     images_dir=root / 'train_images'),
-        'eval':
+        'validation':
             self._generate_examples(
                 metadata_path=root / 'train.csv',  # This correct.
-                split_path=root / 'splits/eval.csv',
+                split_path=root / 'splits/validation.csv',
                 images_dir=root / 'train_images'),
         'test':
             self._generate_examples(metadata_path=root / 'test.csv',

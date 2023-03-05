@@ -1,11 +1,11 @@
 from absl import logging
+import concurrent.futures
 import numpy as np
 import pandas as pd
 import more_itertools as mit
 import epath
 import dataclasses
 import functools
-import multiprocessing as mp
 import pydicom
 import cv2
 
@@ -53,14 +53,14 @@ def load_scans(opts: Options) -> Iterable[Scan]:
     df = df.join(split_df.set_index('patient_id'), on='patient_id', how='inner')
 
   inputs = df.to_dict(orient='records')
-  with mp.Pool() as p:
+  with concurrent.futures.ThreadPoolExecutor() as executor:
     load_fn = functools.partial(
         _load_scan,
         images_dir=opts.images_dir,
         shape=opts.shape,
         labels_exist=opts.labels_exist,
     )
-    for scan in p.imap(load_fn, inputs):
+    for scan in executor.map(load_fn, inputs):
       yield scan
 
 
@@ -118,14 +118,13 @@ def _load_image(
 
     return img[y:y + h, x:x + w]
 
-  return dcm_imaging.dcmreadimg(p,
-                                tfns=[
-                                    pydicom.pixel_data_handlers.apply_voi_lut,
-                                    nodcm(dcm_imaging.normalize),
-                                    dcm_imaging.tomonochrome2,
-                                    nodcm(touint8),
-                                    nodcm(fitimg),
-                                    nodcm(
-                                        functools.partial(dcm_imaging.resize,
-                                                          shape=output_shape)),
-                                ])
+  transforms = [
+      pydicom.pixel_data_handlers.apply_voi_lut,
+      nodcm(dcm_imaging.normalize),
+      dcm_imaging.tomonochrome2,
+      nodcm(touint8),
+      nodcm(fitimg),
+      nodcm(functools.partial(dcm_imaging.resize, shape=output_shape)),
+  ]
+
+  return dcm_imaging.dcmreadimg(p, tfns=transforms)
