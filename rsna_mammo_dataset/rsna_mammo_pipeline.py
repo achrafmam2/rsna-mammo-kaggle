@@ -1,9 +1,9 @@
 from absl import logging
+from etils import epath
+
 import concurrent.futures
 import numpy as np
 import pandas as pd
-import more_itertools as mit
-import epath
 import dataclasses
 import functools
 import pydicom
@@ -52,7 +52,7 @@ def load_scans(opts: Options) -> Iterable[Scan]:
     split_df = pd.read_csv(opts.split_path)
     df = df.join(split_df.set_index('patient_id'), on='patient_id', how='inner')
 
-  inputs = df.to_dict(orient='records')
+  patients_metadata = df.to_dict(orient='records')
   with concurrent.futures.ThreadPoolExecutor() as executor:
     load_fn = functools.partial(
         _load_scan,
@@ -60,33 +60,33 @@ def load_scans(opts: Options) -> Iterable[Scan]:
         shape=opts.shape,
         labels_exist=opts.labels_exist,
     )
-    for scan in executor.map(load_fn, inputs):
+    for scan in executor.map(load_fn, patients_metadata):
       yield scan
 
 
 def _load_scan(
-    inpt: dict[str, Any],
+    metadata: dict[str, Any],
     images_dir: epath.Path,
     shape: Tuple[int, int],
     labels_exist: bool,
 ) -> Scan:
-  scan_id = f'{inpt["patient_id"]}/{inpt["image_id"]}'
-  relpath = images_dir / f'{scan_id}.dcm'
+  scan_id = f'{metadata["patient_id"]}/{metadata["image_id"]}'
+  image_path = images_dir / f'{scan_id}.dcm'
 
   cancer = None
   if labels_exist:
-    cancer = bool(inpt['cancer'])
+    cancer = bool(metadata['cancer'])
 
   return Scan(scan_id=scan_id,
-              patient_id=inpt['patient_id'],
-              image=_load_image(relpath, shape),
-              laterality=inpt['laterality'],
-              view=inpt['view'],
+              patient_id=metadata['patient_id'],
+              image=_load_image(image_path, shape),
+              laterality=metadata['laterality'],
+              view=metadata['view'],
               cancer=cancer)
 
 
 def _load_image(
-    p: epath.Path,
+    path: epath.Path,
     output_shape: Tuple[int, int],
 ) -> np.ndarray:
   """Reads and process the breast image stored in the dicom located by the input path `p`.
@@ -127,4 +127,4 @@ def _load_image(
       nodcm(functools.partial(dcm_imaging.resize, shape=output_shape)),
   ]
 
-  return dcm_imaging.dcmreadimg(p, tfns=transforms)
+  return dcm_imaging.dcmreadimg(path, tfns=transforms)

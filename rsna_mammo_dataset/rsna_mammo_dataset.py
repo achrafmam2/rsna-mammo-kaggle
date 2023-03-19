@@ -4,7 +4,6 @@ from typing import Tuple, Iterable
 
 import tensorflow_datasets as tfds
 import numpy as np
-import epath
 
 from rsna_mammo_dataset import rsna_mammo_pipeline as rmp
 

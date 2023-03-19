@@ -1,45 +1,62 @@
-"""Input pipeline for the breast model."""
+"""Input pipeline for RSNA mamo."""
 
-import cv2
-import dcm_imaging
 import functools
-import pathlib
-import pydicom
-import numpy as np
+from typing import Any
 
-from typing import Tuple
+import jax
+import tensorflow as tf
+import tensorflow_datasets as tfds
+
+from rsna_mammo_dataset import rsna_mammo_dataset
+
+TensorMapping = dict[str, tf.Tensor]
 
 
-def loadbreastimg(
-    p: pathlib.Path,
-    output_shape: Tuple[int, int] = (384, 768),
-) -> np.ndarray:
+def load(
+    *,
+    split: str,
+    batch_size: int,
+    prefetch_buffer_size: int,
+    deterministic: bool,
+) -> tf.data.Dataset:
+  """Loads a dataset split.
 
-  def nodcm(fn):
-    return lambda img, ignore_dcm: fn(img)
+  Args:
+    - split: Which split to read. Valid values are: 'train', 'validation', and
+        'test'.
+    - batch_size: Global batch size.
+    - prefetch_buffer_size: The maximum number of elements that will be buffered
+        when prefetching.
+    - deterministic: Whether the outputs need to be produced in deterministic order.
+  """
+  ds = tfds.load('rsna_mammo_dataset', split=split)
 
-  def touint8(img: np.ndarray) -> np.ndarray:
-    return (img * 255).astype(np.uint8)
+  decode_fn = functools.partial(
+      decode_example,
+      as_supervised=split in ['train', 'validation'],
+  )
+  ds = ds.map(decode_fn, num_parallel_calls=tf.data.AUTOTUNE)
 
-  def fitimg(img: np.ndarray) -> np.ndarray:
-    img = img[10:-10, 10:-10]  # Hack.
+  # TODO(achraf): Add image augmentation.
 
-    mask = (img > 1).astype(np.uint8)
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL,
-                                   cv2.CHAIN_APPROX_SIMPLE)
+  ds = ds.batch(batch_size, drop_remainder=True)
+  ds = ds.prefetch(prefetch_buffer_size)
 
-    c = max(contours, key=cv2.contourArea)
-    x, y, w, h = cv2.boundingRect(c)
+  opts = tf.data.Options()
+  opts.deterministic = deterministic
+  ds = ds.with_options(opts)
 
-    return img[y:y + h, x:x + w]
+  return ds
 
-  tfns = [
-      pydicom.pixel_data_handlers.apply_voi_lut,
-      nodcm(dcm_imaging.normalize),
-      dcm_imaging.tomonochrome2,
-      nodcm(touint8),
-      nodcm(fitimg),
-      nodcm(functools.partial(dcm_imaging.resize, shape=output_shape)),
-  ]
 
-  return dcm_imaging.dcmreadimg(p, tfns)
+def decode_example(
+    example: TensorMapping,
+    as_supervised: bool,
+) -> TensorMapping:
+  image = tf.cast(example['image'], dtype=tf.float32)
+  image = image / 255.0
+
+  if not as_supervised:
+    return {'image': image}
+
+  return {'image': image, 'label': example['cancer']}
